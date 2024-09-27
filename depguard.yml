@@ -1,0 +1,12 @@
+packages:
+  github.com/spf13/cobra:
+    allow: true 
+
+  github.com/go-redis/redis/v8:
+    allow: true
+
+  github.com/Dmitry-Tsarkov/brute-force-service-grw/api:
+    allow: true
+
+  github.com/Dmitry-Tsarkov/brute-force-service-grw/internal/redisclient:
+    allow: true

@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "github.com/Dmitry-Tsarkov/brute-force-service-grw/api";
+
+service AuthService {
+    rpc CheckAuth (AuthRequest) returns (AuthResponse);
+    rpc ResetBucket (ResetRequest) returns (ResetResponse);
+    rpc AddToBlacklist (ListRequest) returns (ListResponse);
+    rpc RemoveFromBlacklist (ListRequest) returns (ListResponse);
+    rpc AddToWhitelist (ListRequest) returns (ListResponse);
+    rpc RemoveFromWhitelist (ListRequest) returns (ListResponse);
+}
+
+message AuthRequest {
+    string login = 1;
+    string password = 2;
+    string ip = 3;
+}
+
+message AuthResponse {
+    bool ok = 1;
+    string error = 2; 
+}
+
+message ResetRequest {
+    string login = 1;
+    string ip = 2;
+}
+
+message ResetResponse {
+    bool status = 1;
+}
+
+message ListRequest {
+    string ip = 1;
+}
+
+message ListResponse {
+    bool status = 1;
+}
