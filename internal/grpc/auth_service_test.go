@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	//nolint:depguard
 	"github.com/stretchr/testify/assert"
 	//nolint:depguard
 	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
