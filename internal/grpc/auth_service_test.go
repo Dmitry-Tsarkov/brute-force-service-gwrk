@@ -8,18 +8,20 @@ import (
 	"testing"
 	"time"
 
-	//nolint:depguard
 	"github.com/stretchr/testify/assert"
-
 	//nolint:depguard
-	pb "github.com/Dmitry-Tsarkov/brute-force-service-grw/api"
+	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
 	//nolint:depguard
-	"github.com/Dmitry-Tsarkov/brute-force-service-grw/internal/grpc"
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/grpc"
 	//nolint:depguard
-	"github.com/Dmitry-Tsarkov/brute-force-service-grw/internal/redisclient"
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 )
 
-const loginLimit = 10
+const (
+	loginLimit    = 10
+	passwordLimit = 5
+	IPLimit       = 100
+)
 
 func createTestRedisClient() *redisclient.Client {
 	return redisclient.NewRedisClient("localhost:6379")
@@ -29,17 +31,20 @@ func TestCheckAuth_WithinLimit(t *testing.T) {
 	redisClient := createTestRedisClient()
 
 	err := redisClient.FlushDB(context.Background())
-	if err != nil {
-		log.Fatalf("Failed to flush DB: %v", err)
-	}
+	assert.NoError(t, err, "Ошибка при очистке базы Redis")
 
 	defer func() {
-		if err := redisClient.FlushDB(context.Background()); err != nil {
-			log.Printf("Error flushing DB: %v", err)
-		}
+		err := redisClient.FlushDB(context.Background())
+		assert.NoError(t, err, "Ошибка при очистке базы Redis")
 	}()
 
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
 
 	req := &pb.AuthRequest{
 		Login:    "testuser",
@@ -47,7 +52,7 @@ func TestCheckAuth_WithinLimit(t *testing.T) {
 		Ip:       "127.0.0.1",
 	}
 
-	err = redisClient.Set(context.Background(), "whitelist:127.0.0.1", "true", time.Hour)
+	err = redisClient.SAdd(context.Background(), "whitelist", "127.0.0.1/32")
 	assert.NoError(t, err, "Ошибка при добавлении IP в белый список")
 
 	for i := 0; i < 5; i++ {
@@ -55,48 +60,105 @@ func TestCheckAuth_WithinLimit(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, res.Ok, "Авторизация должна быть разрешена")
 	}
+
+	res, err := authServer.CheckAuth(context.Background(), req)
+	assert.NoError(t, err)
+	assert.False(t, res.Ok, "Авторизация должна быть отклонена после достижения лимита для пароля")
 }
 
-func TestCheckAuth_ExceedsLimit(t *testing.T) {
+func TestCheckAuth_PasswordLimit(t *testing.T) {
 	redisClient := createTestRedisClient()
+
 	err := redisClient.FlushDB(context.Background())
-	if err != nil {
-		log.Fatalf("Failed to flush DB: %v", err)
-	}
+	assert.NoError(t, err, "Ошибка при очистке базы Redis")
+
 	defer func() {
-		if err := redisClient.FlushDB(context.Background()); err != nil {
-			log.Printf("Error flushing DB: %v", err)
-		}
+		err := redisClient.FlushDB(context.Background())
+		assert.NoError(t, err, "Ошибка при очистке базы Redis")
 	}()
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
+
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    100,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
+
 	req := &pb.AuthRequest{
 		Login:    "testuser",
-		Password: "password123",
+		Password: "password_limit_test",
 		Ip:       "127.0.0.1",
 	}
-	for i := 0; i < loginLimit+1; i++ {
+
+	for i := 0; i < authServer.PasswordLimit; i++ {
 		res, err := authServer.CheckAuth(context.Background(), req)
-		if i < loginLimit {
-			assert.NoError(t, err)
-			assert.True(t, res.Ok, "Авторизация должна быть разрешена до достижения лимита")
-		} else {
-			assert.NoError(t, err)
-			assert.False(t, res.Ok, "Авторизация должна быть отклонена после достижения лимита")
-		}
+		assert.NoError(t, err)
+		assert.True(t, res.Ok, "Авторизация должна быть разрешена до достижения лимита для пароля")
 	}
+
+	res, err := authServer.CheckAuth(context.Background(), req)
+	assert.NoError(t, err)
+	assert.False(t, res.Ok, "Авторизация должна быть отклонена после достижения лимита для пароля")
+}
+
+func TestCheckAuth_LoginLimit(t *testing.T) {
+	redisClient := createTestRedisClient()
+
+	err := redisClient.FlushDB(context.Background())
+	assert.NoError(t, err, "Ошибка при очистке базы Redis")
+
+	defer func() {
+		err := redisClient.FlushDB(context.Background())
+		assert.NoError(t, err, "Ошибка при очистке базы Redis")
+	}()
+
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    loginLimit,
+		PasswordLimit: 100,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
+
+	req := &pb.AuthRequest{
+		Login:    "testuser_login_limit",
+		Password: "password_with_high_limit",
+		Ip:       "127.0.0.1",
+	}
+
+	for i := 0; i < authServer.LoginLimit; i++ {
+		res, err := authServer.CheckAuth(context.Background(), req)
+		assert.NoError(t, err)
+		assert.True(t, res.Ok, "Авторизация должна быть разрешена до достижения лимита для логина")
+	}
+
+	res, err := authServer.CheckAuth(context.Background(), req)
+	assert.NoError(t, err)
+	assert.False(t, res.Ok, "Авторизация должна быть отклонена после достижения лимита для логина")
 }
 
 func TestCheckAuth_Whitelist(t *testing.T) {
 	redisClient := createTestRedisClient()
+
+	err := redisClient.FlushDB(context.Background())
+	assert.NoError(t, err, "Ошибка при очистке базы Redis")
+
 	defer func() {
-		if err := redisClient.FlushDB(context.Background()); err != nil {
-			log.Printf("Error flushing DB: %v", err)
-		}
+		err := redisClient.FlushDB(context.Background())
+		assert.NoError(t, err, "Ошибка при очистке базы Redis")
 	}()
 
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
-	err := redisClient.Set(context.Background(), "whitelist:127.0.0.1", "true", time.Hour)
-	assert.NoError(t, err)
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
+
+	err = redisClient.SAdd(context.Background(), "whitelist", "127.0.0.1/32")
+	assert.NoError(t, err, "Ошибка при добавлении IP в белый список")
 
 	req := &pb.AuthRequest{
 		Login:    "testuser",
@@ -110,23 +172,29 @@ func TestCheckAuth_Whitelist(t *testing.T) {
 
 func TestCheckAuth_Blacklist(t *testing.T) {
 	redisClient := createTestRedisClient()
-
 	defer func() {
 		if err := redisClient.FlushDB(context.Background()); err != nil {
 			log.Printf("Error flushing DB: %v", err)
 		}
 	}()
 
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
 
-	err := redisClient.Set(context.Background(), "blacklist:127.0.0.1", "true", time.Hour)
-	assert.NoError(t, err)
+	err := redisClient.SAdd(context.Background(), "blacklist", "127.0.0.1/32")
+	assert.NoError(t, err, "Ошибка при добавлении IP в черный список")
 
 	req := &pb.AuthRequest{
 		Login:    "testuser",
 		Password: "password123",
 		Ip:       "127.0.0.1",
 	}
+
 	res, err := authServer.CheckAuth(context.Background(), req)
 	assert.NoError(t, err)
 	assert.False(t, res.Ok, "Авторизация должна быть отклонена для IP в черном списке")
@@ -134,15 +202,23 @@ func TestCheckAuth_Blacklist(t *testing.T) {
 
 func TestResetBucket(t *testing.T) {
 	redisClient := createTestRedisClient()
+
+	err := redisClient.FlushDB(context.Background())
+	assert.NoError(t, err, "Ошибка при очистке базы Redis")
+
 	defer func() {
-		if err := redisClient.FlushDB(context.Background()); err != nil {
-			log.Printf("Error flushing DB: %v", err)
-		}
+		err := redisClient.FlushDB(context.Background())
+		assert.NoError(t, err, "Ошибка при очистке базы Redis")
 	}()
 
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
-	err := redisClient.Set(context.Background(), "whitelist:127.0.0.1", "true", time.Hour)
-	assert.NoError(t, err)
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
+
 	for i := 0; i < 3; i++ {
 		_, _ = authServer.CheckAuth(context.Background(), &pb.AuthRequest{
 			Login:    "testuser",
@@ -150,11 +226,13 @@ func TestResetBucket(t *testing.T) {
 			Ip:       "127.0.0.1",
 		})
 	}
+
 	_, err = authServer.ResetBucket(context.Background(), &pb.ResetRequest{
 		Login: "testuser",
 		Ip:    "127.0.0.1",
 	})
 	assert.NoError(t, err)
+
 	resp, err := authServer.CheckAuth(context.Background(), &pb.AuthRequest{
 		Login:    "testuser",
 		Password: "password123",
@@ -165,61 +243,41 @@ func TestResetBucket(t *testing.T) {
 }
 
 func TestCheckAuth_RedisUnavailable(t *testing.T) {
-	s := &grpc.AuthServiceServer{
-		RedisClient: redisclient.NewRedisClient("localhost:9999"),
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisclient.NewRedisClient("localhost:9999"),
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
 	}
-	resp, err := s.CheckAuth(context.Background(), &pb.AuthRequest{
+
+	res, err := authServer.CheckAuth(context.Background(), &pb.AuthRequest{
 		Login:    "testuser",
 		Password: "password123",
 		Ip:       "127.0.0.1",
 	})
 	assert.Error(t, err, "Должна возникнуть ошибка при недоступности Redis")
-	assert.False(t, resp.Ok, "Авторизация должна быть запрещена при недоступности Redis")
-}
-
-func TestCheckAuth_AtLimit(t *testing.T) {
-	redisClient := createTestRedisClient()
-	err := redisClient.FlushDB(context.Background())
-	if err != nil {
-		log.Fatalf("Failed to flush DB: %v", err)
-	}
-	defer func() {
-		if err := redisClient.FlushDB(context.Background()); err != nil {
-			log.Printf("Error flushing DB: %v", err)
-		}
-	}()
-
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
-	req := &pb.AuthRequest{
-		Login:    "testuser",
-		Password: "password123",
-		Ip:       "127.0.0.1",
-	}
-
-	for i := 0; i < loginLimit; i++ {
-		res, err := authServer.CheckAuth(context.Background(), req)
-		assert.NoError(t, err)
-		assert.True(t, res.Ok, "Авторизация должна быть разрешена до достижения лимита")
-	}
-
-	res, err := authServer.CheckAuth(context.Background(), req)
-	assert.NoError(t, err)
-	assert.False(t, res.Ok, "Авторизация должна быть отклонена после достижения лимита")
+	assert.False(t, res.Ok, "Авторизация должна быть запрещена при недоступности Redis")
 }
 
 func TestCheckAuth_Parallel(t *testing.T) {
 	redisClient := createTestRedisClient()
+
 	err := redisClient.FlushDB(context.Background())
-	if err != nil {
-		log.Fatalf("Failed to flush DB: %v", err)
-	}
+	assert.NoError(t, err, "Ошибка при очистке базы Redis")
+
 	defer func() {
-		if err := redisClient.FlushDB(context.Background()); err != nil {
-			log.Printf("Error flushing DB: %v", err)
-		}
+		err := redisClient.FlushDB(context.Background())
+		assert.NoError(t, err, "Ошибка при очистке базы Redis")
 	}()
 
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
 	var wg sync.WaitGroup
 
 	for i := 0; i < 20; i++ {
@@ -232,7 +290,6 @@ func TestCheckAuth_Parallel(t *testing.T) {
 				Password: "password123",
 				Ip:       fmt.Sprintf("127.0.0.%d", i),
 			}
-			log.Printf("Проверка белого списка для IP: %s", req.Ip)
 
 			res, err := authServer.CheckAuth(context.Background(), req)
 			if err != nil {
@@ -252,22 +309,28 @@ func TestCheckAuth_Parallel(t *testing.T) {
 
 func TestCheckAuth_InvalidData(t *testing.T) {
 	redisClient := createTestRedisClient()
+
 	err := redisClient.FlushDB(context.Background())
-	if err != nil {
-		log.Fatalf("Failed to flush DB: %v", err)
-	}
+	assert.NoError(t, err, "Ошибка при очистке базы Redis")
+
 	defer func() {
-		if err := redisClient.FlushDB(context.Background()); err != nil {
-			log.Printf("Error flushing DB: %v", err)
-		}
+		err := redisClient.FlushDB(context.Background())
+		assert.NoError(t, err, "Ошибка при очистке базы Redis")
 	}()
 
-	authServer := &grpc.AuthServiceServer{RedisClient: redisClient}
+	authServer := &grpc.AuthServiceServer{
+		RedisClient:   redisClient,
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     time.Minute,
+	}
 	req := &pb.AuthRequest{}
 
 	res, err := authServer.CheckAuth(context.Background(), req)
 	assert.NoError(t, err)
 	assert.False(t, res.Ok, "Авторизация должна быть отклонена для пустого запроса")
+
 	req = &pb.AuthRequest{
 		Login:    "",
 		Password: "",

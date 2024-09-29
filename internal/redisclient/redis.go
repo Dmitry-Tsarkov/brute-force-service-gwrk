@@ -17,6 +17,9 @@ type RedisClient interface {
 	Del(ctx context.Context, keys ...string) error
 	Decr(ctx context.Context, key string) (int64, error)
 	IncrBy(ctx context.Context, key string, value int64) (int64, error)
+	Expire(ctx context.Context, key string, expiration time.Duration) error
+	SMembers(ctx context.Context, key string) ([]string, error)
+	SAdd(ctx context.Context, key string, members ...interface{}) error
 }
 
 type Client struct {
@@ -53,8 +56,7 @@ func (r *Client) Get(ctx context.Context, key string) (string, error) {
 }
 
 func (r *Client) Del(ctx context.Context, keys ...string) error {
-	_, err := r.client.Del(ctx, keys...).Result()
-	return err
+	return r.client.Del(ctx, keys...).Err()
 }
 
 func (r *Client) Decr(ctx context.Context, key string) (int64, error) {
@@ -63,4 +65,16 @@ func (r *Client) Decr(ctx context.Context, key string) (int64, error) {
 
 func (r *Client) IncrBy(ctx context.Context, key string, value int64) (int64, error) {
 	return r.client.IncrBy(ctx, key, value).Result()
+}
+
+func (r *Client) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	return r.client.Expire(ctx, key, expiration).Err()
+}
+
+func (r *Client) SMembers(ctx context.Context, key string) ([]string, error) {
+	return r.client.SMembers(ctx, key).Result()
+}
+
+func (r *Client) SAdd(ctx context.Context, key string, members ...interface{}) error {
+	return r.client.SAdd(ctx, key, members...).Err()
 }

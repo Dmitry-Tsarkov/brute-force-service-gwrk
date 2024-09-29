@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package auth;
 
-option go_package = "github.com/Dmitry-Tsarkov/brute-force-service-grw/api";
+option go_package = "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api";
 
 service AuthService {
     rpc CheckAuth (AuthRequest) returns (AuthResponse);

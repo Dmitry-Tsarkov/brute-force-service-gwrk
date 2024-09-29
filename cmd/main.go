@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	//nolint:depguard
 	"github.com/spf13/cobra"
@@ -14,20 +15,18 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	//nolint:depguard
-	pb "github.com/Dmitry-Tsarkov/brute-force-service-grw/api"
+	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
 	//nolint:depguard
-	authgrpc "github.com/Dmitry-Tsarkov/brute-force-service-grw/internal/grpc"
+	authgrpc "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/grpc"
 	//nolint:depguard
-	"github.com/Dmitry-Tsarkov/brute-force-service-grw/internal/redisclient"
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 )
 
 func main() {
-	if len(os.Args) > 1 {
-		if err := Execute(); err != nil {
-			log.Fatalf("Ошибка запуска CLI: %v", err)
-		}
-		return
-	}
+	loginLimit := 10
+	passwordLimit := 5
+	IPLimit := 100
+	bucketTTL := time.Minute
 
 	redisHost := os.Getenv("REDIS_HOST")
 	redisPort := os.Getenv("REDIS_PORT")
@@ -54,7 +53,11 @@ func main() {
 	s := grpc.NewServer()
 
 	authServer := &authgrpc.AuthServiceServer{
-		RedisClient: rdb,
+		RedisClient:   rdb,
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     bucketTTL,
 	}
 
 	pb.RegisterAuthServiceServer(s, authServer)

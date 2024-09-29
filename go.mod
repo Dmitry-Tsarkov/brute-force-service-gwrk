@@ -1,4 +1,4 @@
-module github.com/Dmitry-Tsarkov/brute-force-service-grw
+module github.com/Dmitry-Tsarkov/brute-force-service-gwrk
 
 go 1.23
 

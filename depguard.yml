@@ -5,8 +5,11 @@ packages:
   github.com/go-redis/redis/v8:
     allow: true
 
-  github.com/Dmitry-Tsarkov/brute-force-service-grw/api:
+  github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api:
     allow: true
 
-  github.com/Dmitry-Tsarkov/brute-force-service-grw/internal/redisclient:
+  github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient:
+    allow: true
+    
+  github.com/stretchr/testify/assert:
     allow: true

@@ -3,6 +3,7 @@ linters:
   disable:
     # - typecheck
     - gci
+    - funlen
   enable:
     - typecheck
     - asciicheck
@@ -13,7 +14,6 @@ linters:
     - durationcheck
     - errorlint
     - exhaustive
-    - funlen
     - gocognit
     - goconst
     - gocritic

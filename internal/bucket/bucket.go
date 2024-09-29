@@ -9,7 +9,7 @@ import (
 	//nolint:depguard
 	"github.com/go-redis/redis/v8"
 	//nolint:depguard
-	"github.com/Dmitry-Tsarkov/brute-force-service-grw/internal/redisclient"
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 )
 
 type Bucket struct {
