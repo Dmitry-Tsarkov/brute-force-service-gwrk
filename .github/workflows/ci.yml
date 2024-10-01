@@ -40,14 +40,14 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0  
-    
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
+
       - name: Run golangci-lint
         run: golangci-lint run
 
       - name: Run tests
         env:
-          REDIS_HOST: 127.0.0.1
+          REDIS_HOST: localhost  # Changed to "localhost" for better compatibility
           REDIS_PORT: 6379
         run: go test -v ./...
 

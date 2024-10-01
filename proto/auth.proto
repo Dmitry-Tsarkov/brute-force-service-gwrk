@@ -27,6 +27,7 @@ message AuthResponse {
 message ResetRequest {
     string login = 1;
     string ip = 2;
+    string password = 3;
 }
 
 message ResetResponse {

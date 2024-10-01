@@ -4,53 +4,60 @@ import (
 	"log"
 	"net"
 	"os"
-	"strconv"
 
 	//nolint:depguard
 	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
+	//nolint:depguard
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/config"
 	//nolint:depguard
 	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 	"google.golang.org/grpc"
 )
 
-func getLimits() (int, int) {
-	loginLimitStr := os.Getenv("LOGIN_LIMIT")
-	IPLimitStr := os.Getenv("IP_LIMIT")
-
-	loginLimit, err := strconv.Atoi(loginLimitStr)
-	if err != nil {
-		log.Printf("Ошибка чтения LOGIN_LIMIT, используем значение по умолчанию 10")
-		loginLimit = 10
-	}
-
-	IPLimit, err := strconv.Atoi(IPLimitStr)
-	if err != nil {
-		log.Printf("Ошибка чтения IP_LIMIT, используем значение по умолчанию 100")
-		IPLimit = 100
-	}
-
-	return loginLimit, IPLimit
-}
+const (
+	defaultGRPCPort  = "50051"
+	defaultRedisHost = "redis"
+	defaultRedisPort = "6379"
+)
 
 func StartGRPCServer() {
-	lis, err := net.Listen("tcp", "localhost:50051")
-	if err != nil {
-		log.Fatalf("Не удалось начать слушать порт: %v", err)
+	cfg := config.LoadConfig()
+
+	redisHost := cfg.RedisHost
+	if redisHost == "" {
+		redisHost = defaultRedisHost
 	}
 
-	redisClient := redisclient.NewRedisClient("localhost:6379")
-	loginLimit, IPLimit := getLimits()
+	redisPort := cfg.RedisPort
+	if redisPort == "" {
+		redisPort = defaultRedisPort
+	}
+
+	redisAddr := redisHost + ":" + redisPort
+
+	redisClient := redisclient.NewRedisClient(redisAddr)
+
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = defaultGRPCPort
+	}
+
+	lis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatalf("Не удалось начать слушать порт %s: %v", grpcPort, err)
+	}
 
 	authServer := &AuthServiceServer{
 		RedisClient: redisClient,
-		LoginLimit:  loginLimit,
-		IPLimit:     IPLimit,
+		Config:      cfg,
 	}
 
 	s := grpc.NewServer()
 	pb.RegisterAuthServiceServer(s, authServer)
 
-	log.Printf("gRPC сервер работает на порту 50051 с лимитами LoginLimit=%d и IPLimit=%d", loginLimit, IPLimit)
+	log.Printf("gRPC сервер работает на порту %s с лимитами: LoginLimit=%d, PasswordLimit=%d и IPLimit=%d",
+		grpcPort, cfg.LoginLimit, cfg.PasswordLimit, cfg.IPLimit)
+
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("Не удалось запустить сервер: %v", err)
 	}

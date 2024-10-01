@@ -4,6 +4,7 @@ linters:
     # - typecheck
     - gci
     - funlen
+    - staticcheck
   enable:
     - typecheck
     - asciicheck
@@ -41,7 +42,6 @@ linters:
     - revive
     - rowserrcheck
     - sqlclosecheck
-    - staticcheck
     - stylecheck
     - tagliatelle
     - thelper

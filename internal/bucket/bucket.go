@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	//nolint:depguard
 	"github.com/go-redis/redis/v8"
 	//nolint:depguard
 	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"

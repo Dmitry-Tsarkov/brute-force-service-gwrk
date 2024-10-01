@@ -8,23 +8,21 @@ import (
 	"log"
 	"net"
 	"testing"
+	"time"
 
-	//nolint:depguard
+	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/config"
+	authgrpc "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/grpc"
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
-
-	//nolint:depguard
-	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
-	//nolint:depguard
-	authgrpc "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/grpc"
-	//nolint:depguard
-	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 )
 
 const (
 	loginLimit    = 10
 	passwordLimit = 5
 	IPLimit       = 100
+	bucketTTL     = time.Minute
 )
 
 func createTestRedisClient() *redisclient.Client {
@@ -32,6 +30,13 @@ func createTestRedisClient() *redisclient.Client {
 }
 
 func startGRPCServer(redisClient *redisclient.Client) (*grpc.Server, net.Listener, string) {
+	cfg := &config.Config{
+		LoginLimit:    loginLimit,
+		PasswordLimit: passwordLimit,
+		IPLimit:       IPLimit,
+		BucketTTL:     bucketTTL,
+	}
+
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -40,10 +45,8 @@ func startGRPCServer(redisClient *redisclient.Client) (*grpc.Server, net.Listene
 	grpcServer := grpc.NewServer()
 
 	authServer := &authgrpc.AuthServiceServer{
-		RedisClient:   redisClient,
-		LoginLimit:    loginLimit,
-		PasswordLimit: passwordLimit,
-		IPLimit:       IPLimit,
+		RedisClient: redisClient,
+		Config:      cfg,
 	}
 	pb.RegisterAuthServiceServer(grpcServer, authServer)
 
@@ -82,12 +85,15 @@ func TestResetBucket_Integration(t *testing.T) {
 	}
 
 	resetReq := &pb.ResetRequest{
-		Login: "testuser_reset_bucket",
-		Ip:    "127.0.0.1",
+		Login:    "testuser_reset_bucket",
+		Ip:       "127.0.0.1",
+		Password: "password123",
 	}
 	resetResp, err := client.ResetBucket(ctx, resetReq)
 	assert.NoError(t, err)
 	assert.True(t, resetResp.Status, "Бакеты должны быть успешно сброшены")
+
+	time.Sleep(1 * time.Second)
 
 	res, err := client.CheckAuth(ctx, req)
 	assert.NoError(t, err)

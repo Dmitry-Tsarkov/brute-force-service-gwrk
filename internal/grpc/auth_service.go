@@ -11,15 +11,14 @@ import (
 	//nolint:depguard
 	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
 	//nolint:depguard
+	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/config"
+	//nolint:depguard
 	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 )
 
 type AuthServiceServer struct {
-	RedisClient   redisclient.RedisClient
-	LoginLimit    int
-	PasswordLimit int
-	IPLimit       int
-	BucketTTL     time.Duration
+	RedisClient redisclient.RedisClient
+	Config      *config.Config
 	pb.UnimplementedAuthServiceServer
 }
 
@@ -30,7 +29,7 @@ func (s *AuthServiceServer) CheckAuth(ctx context.Context, req *pb.AuthRequest) 
 	}
 
 	passwordKey := fmt.Sprintf("password:%s", req.Password)
-	if allowed, err := s.checkLimit(ctx, passwordKey, s.PasswordLimit, s.BucketTTL); err != nil {
+	if allowed, err := s.checkLimit(ctx, passwordKey, s.Config.PasswordLimit, s.Config.BucketTTL); err != nil {
 		log.Printf("Ошибка Redis при проверке лимита для пароля %s: %v", req.Password, err)
 		return &pb.AuthResponse{Ok: false, Error: "Ошибка проверки лимита для пароля"}, err
 	} else if !allowed {
@@ -39,7 +38,7 @@ func (s *AuthServiceServer) CheckAuth(ctx context.Context, req *pb.AuthRequest) 
 	}
 
 	loginKey := fmt.Sprintf("login:%s", req.Login)
-	if allowed, err := s.checkLimit(ctx, loginKey, s.LoginLimit, s.BucketTTL); err != nil {
+	if allowed, err := s.checkLimit(ctx, loginKey, s.Config.LoginLimit, s.Config.BucketTTL); err != nil {
 		log.Printf("Ошибка Redis при проверке лимита для логина %s: %v", req.Login, err)
 		return &pb.AuthResponse{Ok: false, Error: "Ошибка проверки лимита для логина"}, err
 	} else if !allowed {
@@ -48,7 +47,7 @@ func (s *AuthServiceServer) CheckAuth(ctx context.Context, req *pb.AuthRequest) 
 	}
 
 	ipKey := fmt.Sprintf("ip:%s", req.Ip)
-	if allowed, err := s.checkLimit(ctx, ipKey, s.IPLimit, s.BucketTTL); err != nil {
+	if allowed, err := s.checkLimit(ctx, ipKey, s.Config.IPLimit, s.Config.BucketTTL); err != nil {
 		log.Printf("Ошибка Redis при проверке лимита для IP %s: %v", req.Ip, err)
 		return &pb.AuthResponse{Ok: false, Error: "Ошибка проверки лимита для IP"}, err
 	} else if !allowed {
@@ -156,13 +155,16 @@ func (s *AuthServiceServer) AddToWhitelist(ctx context.Context, req *pb.ListRequ
 func (s *AuthServiceServer) ResetBucket(ctx context.Context, req *pb.ResetRequest) (*pb.ResetResponse, error) {
 	loginKey := fmt.Sprintf("login:%s", req.Login)
 	ipKey := fmt.Sprintf("ip:%s", req.Ip)
+	passwordKey := fmt.Sprintf("password:%s", req.Password)
 
-	err := s.RedisClient.Del(ctx, loginKey, ipKey)
+	log.Printf("Удаление ключей: %s, %s и %s", loginKey, ipKey, passwordKey)
+
+	err := s.RedisClient.Del(ctx, loginKey, ipKey, passwordKey)
 	if err != nil {
 		log.Printf("Ошибка сброса бакетов: %v", err)
 		return &pb.ResetResponse{Status: false}, err
 	}
 
-	log.Printf("Бакеты успешно сброшены для логина: %s, IP: %s", req.Login, req.Ip)
+	log.Printf("Бакеты успешно сброшены для логина: %s, IP: %s, пароль: %s", req.Login, req.Ip, req.Password)
 	return &pb.ResetResponse{Status: true}, nil
 }
