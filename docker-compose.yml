@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:6.2
+    container_name: redis-container
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    networks:
+      - brute-force-network
+
+  brute-force-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: brute-force-service
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - GRPC_PORT=${GRPC_PORT}
+    ports:
+      - "${GRPC_PORT}:${GRPC_PORT}"
+    depends_on:
+      - redis
+    networks:
+      - brute-force-network
+    platform: linux/arm64 # Указываем платформу
+
+networks:
+  brute-force-network:
+    driver: bridge
