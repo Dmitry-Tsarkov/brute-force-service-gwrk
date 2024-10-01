@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"context"
@@ -6,14 +6,19 @@ import (
 	"log"
 	"net"
 
+	//nolint:depguard
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	//nolint:depguard
 	pb "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/api"
+	//nolint:depguard
 	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/config"
+	//nolint:depguard
 	authgrpc "github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/grpc"
+	//nolint:depguard
 	"github.com/Dmitry-Tsarkov/brute-force-service-gwrk/internal/redisclient"
 )
 
